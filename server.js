@@ -8,6 +8,7 @@ const REPO_API = 'https://api.github.com/repos/Keywebco/roger-sim-brain/contents
 const CORE_URL = 'https://raw.githubusercontent.com/Keywebco/nextxus-free-satellites/main/knowledge-base/FEDERATION-CORE-KNOWLEDGE.md';
 const NEWS_URL = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent('https://feeds.bbci.co.uk/news/world/rss.xml');
 const CRYPTO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd';
+const KRAKEN_URL = 'https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD,SOLUSD';
 const PROVIDERS = {
   deepseek: { url: 'https://api.deepseek.com/v1/chat/completions', env: 'DEEPSEEK_GENERIC_API_KEY', model: 'deepseek-chat' },
   mimo: { url: 'https://api.xiaomimimo.com/v1/chat/completions', env: 'MIMO_API_KEY', model: 'mimo-v2.6-flash' },
@@ -82,8 +83,20 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
         const data = await cryptoResult.value.json();
         if (data && typeof data === 'object' && !Array.isArray(data)) crypto = data;
       } catch (_error) { /* Unavailable prices are an empty object. */ }
-    } else {
-      console.warn('World prices unavailable:', cryptoResult.status === 'fulfilled' ? cryptoResult.value.status : cryptoResult.reason.message);
+    }
+    if (!Object.keys(crypto).length) {
+      try {
+        const backup = await request(KRAKEN_URL, {}, 8000, fetchFn);
+        if (backup.ok) {
+          const data = await backup.json();
+          if (Array.isArray(data.error) && !data.error.length && data.result) {
+            for (const [coin, pair] of [['bitcoin', 'XXBTZUSD'], ['ethereum', 'XETHZUSD'], ['solana', 'SOLUSD']]) {
+              const price = Number(data.result[pair]?.c?.[0]);
+              if (Number.isFinite(price) && price > 0) crypto[coin] = { usd: price };
+            }
+          }
+        }
+      } catch (_error) { /* Both feeds unavailable: return empty prices. */ }
     }
     res.json({ news, crypto, fetched_at: new Date().toISOString() });
   });
