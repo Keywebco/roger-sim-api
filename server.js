@@ -82,6 +82,8 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
         const data = await cryptoResult.value.json();
         if (data && typeof data === 'object' && !Array.isArray(data)) crypto = data;
       } catch (_error) { /* Unavailable prices are an empty object. */ }
+    } else {
+      console.warn('World prices unavailable:', cryptoResult.status === 'fulfilled' ? cryptoResult.value.status : cryptoResult.reason.message);
     }
     res.json({ news, crypto, fetched_at: new Date().toISOString() });
   });
