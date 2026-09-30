@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: roger-sim-api
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    envVars:
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: DEEPSEEK_GENERIC_API_KEY
+        sync: false
+      - key: MIMO_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: EMERGENT_LLM_KEY
+        sync: false
+      - key: BRIDGE_TOKEN
+        sync: false
