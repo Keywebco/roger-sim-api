@@ -60,6 +60,7 @@ async function loadPrompt(env = process.env, fetchFn = fetch) {
 function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', 1);
   app.use(cors({ origin(origin, callback) {
     if (!origin || origin === 'https://keywebco.github.io' || /^http:\/\/localhost(?::\d+)?$/.test(origin)) return callback(null, true);
     return callback(null, false);
@@ -101,7 +102,7 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
     res.json({ news, crypto, fetched_at: new Date().toISOString() });
   });
 
-  app.post('/v1/chat/completions', async (req, res) => {
+  async function chatCompletion(req, res) {
     if (env.BRIDGE_TOKEN && req.get('authorization') !== `Bearer ${env.BRIDGE_TOKEN}`) return res.status(401).json({ error: 'Unauthorized' });
     if (!state.prompt) return res.status(503).json({ error: 'Roger Sim knowledge is not loaded' });
     const { model = 'deepseek-chat', messages, stream = false } = req.body || {};
@@ -133,6 +134,30 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
       } catch (_error) { /* Try the next configured provider. */ }
     }
     return res.status(502).json({ error: 'All configured model providers are unavailable' });
+  }
+
+  app.post('/v1/chat/completions', chatCompletion);
+
+  // Browser-facing proxy: the web chat sends no credentials. The server attaches
+  // BRIDGE_TOKEN internally so the token never ships in public HTML/JS.
+  // Same CORS policy as the rest of the app (keywebco.github.io + localhost).
+  // A light per-IP limit protects the provider budget, since this route is open.
+  const proxyHits = new Map();
+  const PROXY_WINDOW_MS = 60000;
+  const PROXY_MAX_PER_WINDOW = Number(env.PROXY_RATE_LIMIT) || 20;
+  app.post('/proxy/chat', (req, res) => {
+    const now = Date.now();
+    const ip = req.ip || 'unknown';
+    const recent = (proxyHits.get(ip) || []).filter(t => now - t < PROXY_WINDOW_MS);
+    if (recent.length >= PROXY_MAX_PER_WINDOW) return res.status(429).json({ error: 'Too many requests, please wait a moment' });
+    recent.push(now);
+    proxyHits.set(ip, recent);
+    if (proxyHits.size > 5000) for (const [key, hits] of proxyHits) if (!hits.some(t => now - t < PROXY_WINDOW_MS)) proxyHits.delete(key);
+    if (env.BRIDGE_TOKEN) req.headers.authorization = `Bearer ${env.BRIDGE_TOKEN}`;
+    else delete req.headers.authorization;
+    const body = req.body || {};
+    req.body = { model: body.model || 'deepseek-chat', messages: body.messages, stream: body.stream === true };
+    return chatCompletion(req, res);
   });
   return app;
 }
