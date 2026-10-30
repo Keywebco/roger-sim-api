@@ -1,3 +1,6 @@
+// Roger Sim API — retry fix 2026-10-30.
+// Change: start() now retries knowledge load until success instead of trying once.
+// A one-time startup failure no longer leaves the Sim stuck until a manual restart.
 'use strict';
 
 const express = require('express');
@@ -162,14 +165,27 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
   return app;
 }
 
+async function loadWithRetry(state, env = process.env) {
+  // Retries knowledge load until it succeeds, so a one-time startup failure no
+  // longer leaves the Sim stuck until a manual restart.
+  // NOTE: this does NOT fix a missing/expired GITHUB_TOKEN or moved source files —
+  // those will retry forever and never succeed; the token/file fix is separate.
+  while (!state.prompt) {
+    try {
+      state.prompt = await loadPrompt(env);
+      console.log('Roger Sim prompt loaded');
+    } catch (error) {
+      console.error('Roger Sim prompt unavailable, retrying in 60s:', error.message);
+      await new Promise((resolve) => setTimeout(resolve, 60000));
+    }
+  }
+}
+
 async function start() {
   const state = { prompt: '' };
-  try {
-    state.prompt = await loadPrompt();
-    console.log('Roger Sim prompt loaded');
-  } catch (error) {
-    console.error('Roger Sim prompt unavailable:', error.message);
-  }
+  // Load in background with retries; server still listens immediately
+  // so /health reports status while loading.
+  loadWithRetry(state);
   createApp({ state }).listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('Roger Sim API listening'));
 }
 
