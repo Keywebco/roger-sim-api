@@ -1,4 +1,4 @@
-// Roger Sim API — public-only load 2026-11-01.
+// Roger Sim API — public-only load 2026-11-01, Gumroad verify added 2026-11-01 (branch).
 // Change: loadPrompt uses only the public FEDERATION-CORE-KNOWLEDGE.md.
 // The private roger-sim-brain attempt is removed entirely. No GITHUB_TOKEN is used.
 // Working-model header is kept.
@@ -129,6 +129,32 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
     }
     return res.status(502).json({ error: 'All configured model providers are unavailable' });
   }
+
+
+  // Gumroad license verification, no secret required.
+  // POST { product_id, license_key } -> { valid, reason }
+  // Calls https://api.gumroad.com/v2/licenses/verify, increment_uses_count=false.
+  // Valid only if success is true AND purchase is not refunded, disputed, or charged back.
+  // No card, no charge, no sale, no stored value. Product ID and license key come from the caller.
+  app.post('/verify-license', async (req, res) => {
+    const product_id = typeof req.body?.product_id === 'string' ? req.body.product_id.trim() : '';
+    const license_key = typeof req.body?.license_key === 'string' ? req.body.license_key.trim() : '';
+    if (!product_id || !license_key) return res.status(400).json({ valid: false, reason: 'product_id and license_key are required' });
+    try {
+      const form = new URLSearchParams({ product_id, license_key, increment_uses_count: 'false' });
+      const upstream = await request('https://api.gumroad.com/v2/licenses/verify', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString() }, 20000, fetchFn);
+      const data = await upstream.json();
+      if (!data.success) return res.json({ valid: false, reason: data.message || 'license key not found' });
+      const purchase = data.purchase || {};
+      if (purchase.refunded) return res.json({ valid: false, reason: 'purchase was refunded' });
+      if (purchase.disputed) return res.json({ valid: false, reason: 'purchase was disputed' });
+      if (purchase.chargebacked) return res.json({ valid: false, reason: 'purchase was charged back' });
+      if (purchase.subscription_cancelled_at) return res.json({ valid: false, reason: 'subscription was cancelled' });
+      return res.json({ valid: true, reason: 'valid', uses: data.uses, email: purchase.email || null });
+    } catch (error) {
+      return res.status(502).json({ valid: false, reason: 'Gumroad verification unavailable' });
+    }
+  });
 
   app.post('/v1/chat/completions', chatCompletion);
 
