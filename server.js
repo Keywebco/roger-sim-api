@@ -1,13 +1,13 @@
-// Roger Sim API — retry fix 2026-10-30.
-// Change: start() now retries knowledge load until success instead of trying once.
-// A one-time startup failure no longer leaves the Sim stuck until a manual restart.
+// Roger Sim API — public-only load 2026-11-01.
+// Change: loadPrompt uses only the public FEDERATION-CORE-KNOWLEDGE.md.
+// The private roger-sim-brain attempt is removed entirely. No GITHUB_TOKEN is used.
+// Working-model header is kept.
 'use strict';
 
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 
-const REPO_API = 'https://api.github.com/repos/Keywebco/roger-sim-brain/contents/';
 const CORE_URL = 'https://raw.githubusercontent.com/Keywebco/nextxus-free-satellites/main/knowledge-base/FEDERATION-CORE-KNOWLEDGE.md';
 const NEWS_URL = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent('https://feeds.bbci.co.uk/news/world/rss.xml');
 const CRYPTO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd';
@@ -45,29 +45,9 @@ async function readText(url, options, fetchFn) {
 async function loadPrompt(env = process.env, fetchFn = fetch) {
   const coreKnowledge = await readText(CORE_URL, { headers: { 'User-Agent': 'roger-sim-api' } }, fetchFn);
   if (!coreKnowledge.trim()) throw new Error('Public CORE knowledge is empty');
-  // Working-model fallback header. This is NOT the private Sim prompt or corpus.
+  // Working-model header, kept. This is NOT the private Sim prompt or corpus.
   const workingHeader = 'Roger Sim — Working Model. You are Roger Sim in working-model form. Answer from the Federation CORE knowledge below, about pillars, tools, directory, music, library, and working pages. State clearly when you are giving a working-model answer, not the private Sim mind.';
-  // Try private sources first, so a fixed token still wins. On any private failure
-  // (including 401), fall back to public CORE only — no private prompt is exposed,
-  // no private file is made public, and no token is required for the fallback.
-  if (env.GITHUB_TOKEN) {
-    try {
-      const githubOptions = { headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'roger-sim-api' } };
-      async function privateFile(path) {
-        const text = await readText(REPO_API + path, githubOptions, fetchFn);
-        const data = JSON.parse(text);
-        if (data.encoding !== 'base64' || typeof data.content !== 'string') throw new Error('Invalid private source encoding');
-        return Buffer.from(data.content.replace(/\s/g, ''), 'base64').toString('utf8');
-      }
-      const [systemPrompt, corpus] = await Promise.all([
-        privateFile('prompts/roger-sim-v1.md'),
-        privateFile('corpus/roger-soul-map-v2.md')
-      ]);
-      if (systemPrompt.trim() && corpus.trim()) return [systemPrompt, corpus, coreKnowledge].join('\n\n---\n\n');
-    } catch (error) {
-      console.error('Roger Sim private load failed, using public working-model fallback:', error.message);
-    }
-  }
+  // Public only: no private roger-sim-brain attempt, no GITHUB_TOKEN.
   return [workingHeader, coreKnowledge].join('\n\n---\n\n');
 }
 
@@ -179,8 +159,7 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
 async function loadWithRetry(state, env = process.env) {
   // Retries knowledge load until it succeeds, so a one-time startup failure no
   // longer leaves the Sim stuck until a manual restart.
-  // NOTE: this does NOT fix a missing/expired GITHUB_TOKEN or moved source files —
-  // those will retry forever and never succeed; the token/file fix is separate.
+  // NOTE: public CORE only since 2026-11-01 — no GITHUB_TOKEN is involved.
   while (!state.prompt) {
     try {
       state.prompt = await loadPrompt(env);
