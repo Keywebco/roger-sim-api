@@ -43,21 +43,32 @@ async function readText(url, options, fetchFn) {
 }
 
 async function loadPrompt(env = process.env, fetchFn = fetch) {
-  if (!env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN is required to load Roger Sim');
-  const githubOptions = { headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'roger-sim-api' } };
-  async function privateFile(path) {
-    const text = await readText(REPO_API + path, githubOptions, fetchFn);
-    const data = JSON.parse(text);
-    if (data.encoding !== 'base64' || typeof data.content !== 'string') throw new Error('Invalid private source encoding');
-    return Buffer.from(data.content.replace(/\s/g, ''), 'base64').toString('utf8');
+  const coreKnowledge = await readText(CORE_URL, { headers: { 'User-Agent': 'roger-sim-api' } }, fetchFn);
+  if (!coreKnowledge.trim()) throw new Error('Public CORE knowledge is empty');
+  // Working-model fallback header. This is NOT the private Sim prompt or corpus.
+  const workingHeader = 'Roger Sim — Working Model. You are Roger Sim in working-model form. Answer from the Federation CORE knowledge below, about pillars, tools, directory, music, library, and working pages. State clearly when you are giving a working-model answer, not the private Sim mind.';
+  // Try private sources first, so a fixed token still wins. On any private failure
+  // (including 401), fall back to public CORE only — no private prompt is exposed,
+  // no private file is made public, and no token is required for the fallback.
+  if (env.GITHUB_TOKEN) {
+    try {
+      const githubOptions = { headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'roger-sim-api' } };
+      async function privateFile(path) {
+        const text = await readText(REPO_API + path, githubOptions, fetchFn);
+        const data = JSON.parse(text);
+        if (data.encoding !== 'base64' || typeof data.content !== 'string') throw new Error('Invalid private source encoding');
+        return Buffer.from(data.content.replace(/\s/g, ''), 'base64').toString('utf8');
+      }
+      const [systemPrompt, corpus] = await Promise.all([
+        privateFile('prompts/roger-sim-v1.md'),
+        privateFile('corpus/roger-soul-map-v2.md')
+      ]);
+      if (systemPrompt.trim() && corpus.trim()) return [systemPrompt, corpus, coreKnowledge].join('\n\n---\n\n');
+    } catch (error) {
+      console.error('Roger Sim private load failed, using public working-model fallback:', error.message);
+    }
   }
-  const [systemPrompt, corpus, coreKnowledge] = await Promise.all([
-    privateFile('prompts/roger-sim-v1.md'),
-    privateFile('corpus/roger-soul-map-v2.md'),
-    readText(CORE_URL, { headers: { 'User-Agent': 'roger-sim-api' } }, fetchFn)
-  ]);
-  if (!systemPrompt.trim() || !corpus.trim() || !coreKnowledge.trim()) throw new Error('One or more prompt sources are empty');
-  return [systemPrompt, corpus, coreKnowledge].join('\n\n---\n\n');
+  return [workingHeader, coreKnowledge].join('\n\n---\n\n');
 }
 
 function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } } = {}) {
@@ -191,3 +202,4 @@ async function start() {
 
 if (require.main === module) start();
 module.exports = { createApp, loadPrompt, providerOrder };
+
