@@ -63,6 +63,10 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
 
   app.get('/health', (_req, res) => res.json({ status: state.prompt ? 'online' : 'unavailable', mind: 'Roger Sim', corpus_loaded: Boolean(state.prompt), timestamp: new Date().toISOString() }));
 
+  // Root route: previously unimplemented (Express returned 'Cannot GET /').
+  // Working model only: public CORE knowledge, no private Sim brain claim.
+  app.get('/', (_req, res) => res.json({ service: 'roger-sim-api', mind: 'Roger Sim', status: state.prompt ? 'online' : 'unavailable', corpus_loaded: Boolean(state.prompt), health: '/health', note: 'working model, public CORE only' }));
+
   app.get('/world', async (_req, res) => {
     const [newsResult, cryptoResult] = await Promise.allSettled([request(NEWS_URL, {}, 10000, fetchFn), request(CRYPTO_URL, { headers: { Accept: 'application/json', 'User-Agent': 'Roger-Sim/1.0 (public-world-monitor)' } }, 10000, fetchFn)]);
     let news = [];
