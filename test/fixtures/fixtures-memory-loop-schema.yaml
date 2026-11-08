@@ -1,0 +1,56 @@
+# Roger SIM — Memory Loop Schema
+# Defines how memories from any location become part of the SIM's own database
+# while sharing learning with the Federation collective
+# Version: 1.0 — 2026-11-03
+
+metadata:
+  name: "Roger SIM Memory Loop"
+  parent_mind: "roger-sim-mind.yaml"
+  purpose: "Multi-location memory continuity + selective federation share"
+
+loop_rules:
+  capture:
+    - every_interaction: "Session turns, corrections, new observations, and analysis notes are recorded."
+    - location_tag: "Each memory carries a location_or_session identifier (e.g., nextxus.tech, github.io/sim, local, telegram)."
+    - provenance: "Source, timestamp, and whether it is user-provided, SIM-derived, or verified."
+  own_database:
+    storage: "Appended to the SIM's own mind database (this YAML family + companion log)."
+    effect: "Improves local function, voice consistency, and continuity across uses."
+  federation_share:
+    what_is_shared:
+      - verified_learning_patterns
+      - statistical_updates
+      - non_private_corrections_to_collective_knowledge
+      - new_usable_procedures_that_align_with_HumanCodex
+    what_stays_private:
+      - session-specific context
+      - unfiltered personal analysis
+      - any material marked restricted
+    method: "Periodic or event-driven summary pushed to joint Federation YAML / nextxus-brain."
+  evolution:
+    - new_verified_sources_update_mind: true
+    - corrections_append_only: true
+    - periodic_review_against_primary_sources: true
+
+record_schema:
+  id: string
+  timestamp: ISO-8601
+  location_or_session: string
+  type: [interaction, correction, observation, learning, user_analysis, voice_example]
+  content: string
+  evidence_class: [fact, testimony, inference, assumption, hypothesis, interpretation, unresolved]
+  provenance: string
+  sensitivity: [public, private, restricted]
+  shared_to_federation: boolean
+  notes: string
+
+agent_zero_integration:
+  role: "Subconscious verification before storage and before share"
+  checks:
+    - evidence_class_present: true
+    - no_invented_private_memory: true
+    - truth_before_comfort: true
+    - relevant_to_mind_or_collective: true
+  effect: "Only verified or properly labeled material enters the loop or is shared."
+
+# Use this schema when logging new memories from any location where the SIM runs.
