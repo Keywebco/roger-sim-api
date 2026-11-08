@@ -1,4 +1,10 @@
 // Roger Sim API — public-only load 2026-11-01, Gumroad verify added 2026-11-01 (branch).
+// Sim Intellect wiring 2026-11-08 (branch sim-intellect-wiring-2026-11-08):
+//   /sim/chat loads the three-part Sim-intellect combination per call
+//   (EchoCore v3.7 procedure + Keyserling Procedure + Agent Zero, the
+//   Roger Sim mind-layer files, and the YAML-database slice), runs Agent
+//   Zero as a real second pass, and queues memory for a branch/PR filing.
+//   /proxy/chat is unchanged. No token, no secret, no new service.
 // Change: loadPrompt uses only the public FEDERATION-CORE-KNOWLEDGE.md.
 // The private roger-sim-brain attempt is removed entirely. No GITHUB_TOKEN is used.
 // Working-model header is kept.
@@ -7,6 +13,9 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const simIntellect = require('./sim-intellect/loader');
+const agentZero = require('./sim-intellect/agent-zero');
+const simMemory = require('./sim-intellect/memory');
 
 const CORE_URL = 'https://raw.githubusercontent.com/Keywebco/nextxus-free-satellites/main/knowledge-base/FEDERATION-CORE-KNOWLEDGE.md';
 const NEWS_URL = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent('https://feeds.bbci.co.uk/news/world/rss.xml');
@@ -52,6 +61,7 @@ async function loadPrompt(env = process.env, fetchFn = fetch) {
 }
 
 function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } } = {}) {
+  if (!state.outbox) state.outbox = simMemory.createOutbox();
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
@@ -61,11 +71,11 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
   } }));
   app.use(express.json({ limit: '1mb' }));
 
-  app.get('/health', (_req, res) => res.json({ status: state.prompt ? 'online' : 'unavailable', mind: 'Roger Sim', corpus_loaded: Boolean(state.prompt), timestamp: new Date().toISOString() }));
+  app.get('/health', (_req, res) => res.json({ status: state.prompt ? 'online' : 'unavailable', mind: 'Roger Sim', corpus_loaded: Boolean(state.prompt), sim_intellect_loaded: Boolean(state.intellect && state.intellect.loaded), timestamp: new Date().toISOString() }));
 
   // Root route: previously unimplemented (Express returned 'Cannot GET /').
   // Working model only: public CORE knowledge, no private Sim brain claim.
-  app.get('/', (_req, res) => res.json({ service: 'roger-sim-api', mind: 'Roger Sim', status: state.prompt ? 'online' : 'unavailable', corpus_loaded: Boolean(state.prompt), health: '/health', note: 'working model, public CORE only' }));
+  app.get('/', (_req, res) => res.json({ service: 'roger-sim-api', mind: 'Roger Sim', status: state.prompt ? 'online' : 'unavailable', corpus_loaded: Boolean(state.prompt), sim_intellect_loaded: Boolean(state.intellect && state.intellect.loaded), health: '/health', sim_intellect: '/sim/intellect', note: 'working model, public CORE only; /sim/chat is the Sim-intellect route (branch, not live)' }));
 
   app.get('/world', async (_req, res) => {
     const [newsResult, cryptoResult] = await Promise.allSettled([request(NEWS_URL, {}, 10000, fetchFn), request(CRYPTO_URL, { headers: { Accept: 'application/json', 'User-Agent': 'Roger-Sim/1.0 (public-world-monitor)' } }, 10000, fetchFn)]);
@@ -99,6 +109,105 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
     }
     res.json({ news, crypto, fetched_at: new Date().toISOString() });
   });
+
+  // Non-streaming provider call, for /sim/chat and the optional Agent Zero
+  // LLM pass. Same provider chain as chatCompletion; returns the full text
+  // instead of piping a stream, so Agent Zero can check it before reply.
+  async function completeChat({ model = 'deepseek-chat', messages }) {
+    for (const name of providerOrder(model)) {
+      const provider = PROVIDERS[name];
+      const key = env[provider.env];
+      if (!key) continue;
+      try {
+        const upstream = await request(provider.url, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: provider.model, messages, stream: false }),
+        }, 90000, fetchFn);
+        if (!upstream.ok) { upstream.body?.resume(); continue; }
+        const data = await upstream.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (typeof text !== 'string' || !text.trim()) continue;
+        return { ok: true, provider: name, model: provider.model, text };
+      } catch (_error) { /* Try the next configured provider. */ }
+    }
+    return { ok: false, error: 'All configured model providers are unavailable' };
+  }
+
+  // ---- Sim Intellect routes (branch only; /proxy/chat above is unchanged) ----
+  // GET /sim/intellect — what the loader loaded, sizes and status only.
+  // Never returns prompt contents.
+  app.get('/sim/intellect', (_req, res) => res.json({ service: 'sim-intellect', ...simIntellect.statusOf(state.intellect || null), core_loaded: Boolean(state.prompt) }));
+
+  // POST /sim/chat — draft answer from the intellect prompt, then the real
+  // Agent Zero second pass. Body: { model?, messages } (same shape as /proxy/chat).
+  app.post('/sim/chat', async (req, res) => {
+    if (!state.intellect || !state.intellect.loaded) return res.status(503).json({ error: 'Sim intellect is not loaded yet' });
+    if (!state.prompt) return res.status(503).json({ error: 'Roger Sim knowledge is not loaded' });
+    const { model = 'deepseek-chat', messages } = req.body || {};
+    if (!Array.isArray(messages) || !messages.length || messages.some((message) => !message || typeof message !== 'object' || !['system', 'developer', 'user', 'assistant', 'tool'].includes(message.role))) {
+      return res.status(400).json({ error: 'A nonempty messages array with valid roles is required' });
+    }
+    // The user's question, for the YAML-DB keyword query (loaded slice only).
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const dbQuery = lastUser ? state.intellect.query(lastUser.content || '') : { question: '', matches: [] };
+    const systemPrompt = [
+      state.intellect.prompt,
+      '---\n\nFederation CORE knowledge (public):',
+      state.prompt,
+      dbQuery.matches.length ? `---\n\nYAML-database matches for this question (keyword search over the loaded slice):\n${JSON.stringify(dbQuery.matches, null, 2)}` : '',
+    ].filter(Boolean).join('\n\n');
+    const draft = await completeChat({ model, messages: [{ role: 'system', content: systemPrompt }, ...messages] });
+    if (!draft.ok) return res.status(502).json({ error: draft.error });
+    // Agent Zero, mechanical pass: always on, the floor.
+    const mechanical = agentZero.verifyAnswer(draft.text, state.intellect.corpus);
+    let agentZeroResult = { ...mechanical, llm_pass: 'off' };
+    // Optional LLM pass: only with SIM_INTELLECT_AGENT_ZERO_LLM=1. It can
+    // only qualify/reject further; it never overturns a mechanical REJECT.
+    if (env.SIM_INTELLECT_AGENT_ZERO_LLM === '1') {
+      const llm = await agentZero.llmSecondPass(
+        (llmMessages) => completeChat({ model, messages: llmMessages }),
+        draft.text, state.intellect.corpus.slice(0, 8000),
+      );
+      if (llm) {
+        const llmRejected = llm.claims.filter((c) => c.label === 'REJECT');
+        agentZeroResult = { ...mechanical, llm_pass: 'on', llm_verdict: llm.verdict, llm_claims: llm.claims };
+        if (llmRejected.length && mechanical.verdict !== 'rejected') {
+          agentZeroResult.verdict = 'rejected';
+          agentZeroResult.rejected = [...agentZeroResult.rejected, ...llmRejected.map((c) => ({ text: c.text, reason: c.reason || 'Rejected by the Agent Zero LLM pass.' }))];
+        }
+      } else {
+        agentZeroResult.llm_pass = 'attempted-unavailable';
+      }
+    }
+    return res.json({
+      answer: mechanical.corrected_answer,
+      draft_answer: draft.text,
+      agent_zero: agentZeroResult,
+      provider: draft.provider, model: draft.model,
+      intellect: { loaded_at: state.intellect.loadedAt, db_query: dbQuery },
+    });
+  });
+
+  // POST /sim/memory — validate a memory record, run the Agent Zero storage
+  // checks, and queue it for filing as a branch/PR proposal in
+  // Keywebco/nextxus-yaml source/roger-sim/mind/memory-log.yaml.
+  // Nothing is written to any repo from this server.
+  app.post('/sim/memory', (req, res) => {
+    const record = req.body || {};
+    const errors = simMemory.validateMemoryRecord(record);
+    if (errors.length) return res.status(400).json({ status: 'rejected', errors });
+    const queued = state.outbox.add(record);
+    return res.json({
+      status: 'queued-for-pr', record_id: record.id, queued,
+      yaml_block: simMemory.buildYamlBlock(record),
+      file_to: 'Keywebco/nextxus-yaml source/roger-sim/mind/memory-log.yaml (append-only)',
+      next_step: 'File as a branch + PR; Roger merges. Nothing is written to main from this server.',
+    });
+  });
+
+  // GET /sim/memory/outbox — queued record metadata only (no contents).
+  app.get('/sim/memory/outbox', (_req, res) => res.json({ queued: state.outbox.list() }));
 
   async function chatCompletion(req, res) {
     if (env.BRIDGE_TOKEN && req.get('authorization') !== `Bearer ${env.BRIDGE_TOKEN}`) return res.status(401).json({ error: 'Unauthorized' });
@@ -201,14 +310,36 @@ async function loadWithRetry(state, env = process.env) {
   }
 }
 
+async function loadIntellectWithRetry(state, env = process.env) {
+  // Loads the Sim-intellect combination in the background with retries.
+  // Never blocks /proxy/chat: if it never loads, /sim/chat answers 503
+  // and everything else keeps working. No token is used (public raw files).
+  while (!state.intellect || !state.intellect.loaded) {
+    try {
+      const intellect = await simIntellect.loadIntellect({ fetchFn: fetch, coreText: state.prompt });
+      state.intellect = intellect;
+      if (intellect.loaded) {
+        console.log(`Sim intellect loaded: ${intellect.sources.filter((s) => s.ok).length}/${intellect.sources.length} sources`);
+      } else {
+        console.error('Sim intellect incomplete, retrying in 60s:', JSON.stringify(intellect.sources.filter((s) => !s.ok).map((s) => s.id)));
+        await new Promise((resolve) => setTimeout(resolve, 60000));
+      }
+    } catch (error) {
+      console.error('Sim intellect load failed, retrying in 60s:', error.message);
+      await new Promise((resolve) => setTimeout(resolve, 60000));
+    }
+  }
+}
+
 async function start() {
-  const state = { prompt: '' };
+  const state = { prompt: '', intellect: null };
   // Load in background with retries; server still listens immediately
   // so /health reports status while loading.
   loadWithRetry(state);
+  loadIntellectWithRetry(state);
   createApp({ state }).listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('Roger Sim API listening'));
 }
 
 if (require.main === module) start();
-module.exports = { createApp, loadPrompt, providerOrder };
+module.exports = { createApp, loadPrompt, providerOrder, simIntellect, agentZero, simMemory };
 
