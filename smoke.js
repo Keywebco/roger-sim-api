@@ -88,6 +88,14 @@ const nodeFetch = require('node-fetch');
       console.log('sim/intellect loaded:', status.loaded, 'sources ok:', status.sources.filter((s) => s.ok).length, '/', status.sources.length);
       assert.equal(status.loaded, true);
       assert.equal(status.sources.filter((s) => s.ok).length, 9);
+      const access = await (await fetch(`${base}/sims/access`)).json();
+      console.log('sims/access rule:', access.rule);
+      assert.equal(access.access.length, 3, 'access table has 3 rows');
+      assert.ok(access.rule.includes('mind is public'), 'split rule: mind is public');
+      assert.equal(access.private_brain_loaded, false, 'secrets file empty / no token, same as main');
+      assert.equal(access.private_secrets_loaded, false);
+      assert.equal(access.public_mind_loaded, false, 'public packet PR unmerged: fetch fails closed');
+      assert.ok(access.access[0].can.includes('public personality packet'));
       const proxy = await fetch(`${base}/proxy/chat`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [{ role: 'user', content: 'What is the library?' }] }),
