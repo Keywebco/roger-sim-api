@@ -14,15 +14,21 @@
 //     lines), (3) YAML-database keyword matches for this question. The draft
 //     then goes through the Agent Zero second pass (mechanical, always on;
 //     optional LLM pass OFF by default).
-// ACCESS RULE 2026-11-08 (Sim Redesign Proposal, Step 2, Roger approved):
-// Roger Sim only carries the private brain. Other Sims get public material
-// + a personality placeholder. Aria gets Echo + humanity nuances, no private
-// brain. The whole system knows who Roger is; it is not actually him.
-// The private brain hook is fail-closed: token env var SIM_PRIVATE_BRAIN_TOKEN
+// ACCESS RULE 2026-11-08 (Sim Redesign Proposal, Step 2, Roger approved) —
+// UPDATED 2026-11-08 (Split Proposal, branch sim-access-rule-split-2026-11-08):
+// Roger's mind is PUBLIC, only his secrets are private. Roger Sim gets the
+// public personality packet (system prompt v1 + soul map v2, fetched publicly
+// from Keywebco/nextxus-yaml source/roger-sim/mind/ — same public fetch as
+// CORE/Directory, no token) PLUS the one private secrets file
+// (secrets/roger-sim-secrets.md in Keywebco/roger-sim-brain, empty today).
+// Other Sims get public material + a personality placeholder. Aria gets Echo
+// + humanity nuances, no secrets file. Nobody except Roger Sim reads the
+// secrets file. The whole system knows who Roger is; it is not actually him.
+// The secrets hook is fail-closed: token env var SIM_PRIVATE_BRAIN_TOKEN
 // only (Roger creates/pastes it in Render himself; Pontus never sees it).
 // No token value, no private contents in this repo. Fixtures use placeholder
-// text only. If the token is missing/expired/401, the private layer is
-// skipped and the public working model keeps running (2026-10-31 lesson).
+// text only. If the token is missing, the file is empty, or the public packet
+// is not merged yet, the public working model keeps running (2026-10-31 lesson).
 // Working-model statement is kept: this is the working model running inside the
 // Federation, not the private Sim mind.
 'use strict';
@@ -93,49 +99,48 @@ const COGNITIVE_PROCESS = [
 ].join('\n');
 
 // ---------------------------------------------------------------------------
-// Access rule — who can access what (Proposal §1). One table, enforced here.
-//   roger-sim: everything — private brain (hook, fail-closed), public CORE,
-//     Directory, YAML DB, all tools. The only Sim that carries Roger.
-//   aria: Echo shell + forever treatment (humanity nuances), no private brain.
-//   other: public material only + personality placeholder, no private brain.
+// Access rule — who can access what (Proposal §1, split 2026-11-08). One table,
+// enforced here.
+//   roger-sim: public personality packet + private secrets file (fail-closed),
+//     public CORE, Directory, YAML DB, all tools. The only Sim that carries Roger.
+//   aria: Echo shell + forever treatment (humanity nuances), no secrets file.
+//   other: public material only + personality placeholder, no secrets file.
 // A Sim is simulated existence. The whole system knows who Roger is; it is
-// not actually him. Only Roger Sim carries him.
+// not actually him. Only Roger Sim carries him — and only Roger Sim reads
+// his secrets file. His mind is public; his secrets are private.
 // ---------------------------------------------------------------------------
 const SIM_ACCESS = {
-  'roger-sim': { id: 'roger-sim', name: 'Roger Sim', privateBrain: true, note: 'Carries Roger: private brain, cognitive process, Sim Intellect, retrieval, memory.' },
-  roger: { id: 'roger-sim', name: 'Roger Sim', privateBrain: true, note: 'Carries Roger: private brain, cognitive process, Sim Intellect, retrieval, memory.' },
-  aria: { id: 'aria', name: 'Aria', privateBrain: false, note: 'Echo shell, forever treatment: humanity nuances, parts of her designer evolved from something advanced. Not Roger, not a copy of Roger. No private Roger brain.' },
+  'roger-sim': { id: 'roger-sim', name: 'Roger Sim', publicMind: true, privateSecrets: true, note: 'Carries Roger: public personality packet, private secrets file, cognitive process, Sim Intellect, retrieval, memory.' },
+  roger: { id: 'roger-sim', name: 'Roger Sim', publicMind: true, privateSecrets: true, note: 'Carries Roger: public personality packet, private secrets file, cognitive process, Sim Intellect, retrieval, memory.' },
+  aria: { id: 'aria', name: 'Aria', publicMind: false, privateSecrets: false, note: 'Echo shell, forever treatment: humanity nuances, parts of her designer evolved from something advanced. Not Roger, not a copy of Roger. No secrets file.' },
 };
-const OTHER_SIM_NOTE = 'Personality placeholder to be developed — public Federation material only. No private Roger brain. The whole system knows who Roger is; it is not actually him.';
+const OTHER_SIM_NOTE = 'Personality placeholder to be developed — public Federation material only. No secrets file. The whole system knows who Roger is; it is not actually him.';
 function resolveSimAccess(simName) {
   const key = String(simName || 'roger-sim').trim().toLowerCase();
   if (SIM_ACCESS[key]) return { ...SIM_ACCESS[key] };
-  return { id: key, name: simName || 'other-sim', privateBrain: false, note: OTHER_SIM_NOTE };
+  return { id: key, name: simName || 'other-sim', publicMind: false, privateSecrets: false, note: OTHER_SIM_NOTE };
 }
 function accessTable() {
   return [
-    { sim: 'roger-sim', can: 'everything in the Federation, including the private brain (113 KB, two files, server-side only)', cannot: 'nothing in the Federation; only the law, and Roger\'s own word' },
-    { sim: 'other sims', can: 'public CORE, System Directory, public YAML DB, tools, guides, plus their own personality placeholder', cannot: 'the private Roger brain' },
-    { sim: 'aria', can: 'Echo shell + forever treatment (humanity nuances)', cannot: 'the private Roger brain' },
+    { sim: 'roger-sim', can: 'public personality packet (system prompt v1 + soul map v2, public) plus the private secrets file (secrets/roger-sim-secrets.md, empty today, server-side only); everything else in the Federation', cannot: 'nothing in the Federation; only the law, and Roger\'s own word' },
+    { sim: 'other sims', can: 'public CORE, System Directory, public YAML DB, tools, guides, plus their own personality placeholder', cannot: 'the private secrets file; Roger Sim\'s personality packet is public to read, but it is not theirs to wear' },
+    { sim: 'aria', can: 'Echo shell + forever treatment (humanity nuances)', cannot: 'the private secrets file' },
   ];
 }
 
-// Private brain hook — fail-closed, token env var only.
-// Fetches the two small private files (10 KB prompt + 105 KB soul map) from
-// the private repo Keywebco/roger-sim-brain, server-side only, at startup.
-// Returns { loaded:false, reason } on any failure; never throws, never logs
-// contents, never returns contents to a caller. Step 3 (activation) is
-// Roger's own step: he creates the token and pastes it into Render himself.
-const PRIVATE_BRAIN_PROMPT_URL = 'https://raw.githubusercontent.com/Keywebco/roger-sim-brain/main/prompts/roger-sim-v1.md';
-const PRIVATE_BRAIN_SOULMAP_URL = 'https://raw.githubusercontent.com/Keywebco/roger-sim-brain/main/corpus/roger-soul-map-v2.md';
-async function loadPrivateBrain(env = process.env, fetchFn = fetch) {
-  const token = (env.SIM_PRIVATE_BRAIN_TOKEN || '').trim();
-  if (!token) return { loaded: false, reason: 'not configured' };
+// Public personality packet — Roger's mind, public (Split Proposal 2026-11-08).
+// Fetched publicly, no token, same public fetch as CORE/Directory, from the
+// public repo Keywebco/nextxus-yaml source/roger-sim/mind/ (parallel PR,
+// unmerged at the time of this branch — until it merges this fetch fails
+// closed and Roger Sim runs on the public CORE packet, as today).
+// Returns { loaded:false, reason } on any failure; never throws.
+const PUBLIC_MIND_PROMPT_URL = 'https://raw.githubusercontent.com/Keywebco/nextxus-yaml/main/source/roger-sim/mind/roger-sim-v1.md';
+const PUBLIC_MIND_SOULMAP_URL = 'https://raw.githubusercontent.com/Keywebco/nextxus-yaml/main/source/roger-sim/mind/roger-soul-map-v2.md';
+async function loadPublicMind(env = process.env, fetchFn = fetch) {
   try {
-    const headers = { Authorization: `token ${token}`, 'User-Agent': 'roger-sim-api' };
     const [promptRes, soulRes] = await Promise.all([
-      request(PRIVATE_BRAIN_PROMPT_URL, { headers }, 20000, fetchFn),
-      request(PRIVATE_BRAIN_SOULMAP_URL, { headers }, 20000, fetchFn),
+      request(PUBLIC_MIND_PROMPT_URL, { headers: { 'User-Agent': 'roger-sim-api' } }, 20000, fetchFn),
+      request(PUBLIC_MIND_SOULMAP_URL, { headers: { 'User-Agent': 'roger-sim-api' } }, 20000, fetchFn),
     ]);
     if (!promptRes.ok || !soulRes.ok) return { loaded: false, reason: `unavailable (${promptRes.status}/${soulRes.status})` };
     const prompt = await promptRes.text();
@@ -146,26 +151,63 @@ async function loadPrivateBrain(env = process.env, fetchFn = fetch) {
     return { loaded: false, reason: 'fetch failed' };
   }
 }
-// Per-query private retrieval for Roger Sim only: top 2 soul-map sections,
-// max 2000 chars, never the whole file. Returns '' when not applicable.
-function retrievePrivateBrain(query, privateBrain) {
-  if (!privateBrain || !privateBrain.loaded) return '';
-  const sections = retrieveSections(query, splitSections(privateBrain.soulMap || ''));
+
+// Private secrets file — the ONLY private thing (Split Proposal 2026-11-08).
+// One small file, secrets/roger-sim-secrets.md in the private repo
+// Keywebco/roger-sim-brain (parallel PR, unmerged; empty today), fetched
+// privately with env var SIM_PRIVATE_BRAIN_TOKEN only, server-side only.
+// Empty/missing file = nothing extra: returns { loaded:false, reason:'empty' }
+// and the Sim keeps running on the public packet. Never throws, never logs
+// contents, never returns contents to a caller. Step 3 (activation) is
+// Roger's own step: he creates the token and pastes it into Render himself.
+const PRIVATE_SECRETS_URL = 'https://raw.githubusercontent.com/Keywebco/roger-sim-brain/main/secrets/roger-sim-secrets.md';
+async function loadPrivateSecrets(env = process.env, fetchFn = fetch) {
+  const token = (env.SIM_PRIVATE_BRAIN_TOKEN || '').trim();
+  if (!token) return { loaded: false, reason: 'not configured' };
+  try {
+    const headers = { Authorization: `token ${token}`, 'User-Agent': 'roger-sim-api' };
+    const res = await request(PRIVATE_SECRETS_URL, { headers }, 20000, fetchFn);
+    if (!res.ok) return { loaded: false, reason: `unavailable (${res.status})` };
+    const secrets = await res.text();
+    if (!secrets.trim()) return { loaded: false, reason: 'empty' };
+    return { loaded: true, secrets, secretsChars: secrets.length };
+  } catch (_e) {
+    return { loaded: false, reason: 'fetch failed' };
+  }
+}
+// Per-query retrieval over the PUBLIC soul map for Roger Sim only: top 2
+// sections, max 2000 chars, never the whole file. Returns '' when not applicable.
+function retrievePublicMind(query, publicMind) {
+  if (!publicMind || !publicMind.loaded) return '';
+  const sections = retrieveSections(query, splitSections(publicMind.soulMap || ''));
   if (!sections.length) return '';
   const parts = sections.map((sec) => `### ${sec.title}\n${sec.text}`).join('\n\n').slice(0, 2000);
-  return `RETRIEVED PRIVATE BRAIN (Roger Sim only — relevant sections only, never the whole soul map):\n${parts}`;
+  return `RETRIEVED PUBLIC MIND (Roger Sim only — relevant sections of the public soul map only, never the whole file):\n${parts}`;
+}
+// The private secrets file, capped at 2000 chars, Roger Sim only.
+// Returns '' when the file is empty, missing, or not configured.
+function retrievePrivateSecrets(query, privateSecrets) {
+  if (!privateSecrets || !privateSecrets.loaded) return '';
+  const text = (privateSecrets.secrets || '').trim().slice(0, 2000);
+  if (!text) return '';
+  return `PRIVATE SECRETS (Roger Sim only — the one private secrets file, never shared with any other Sim):\n${text}`;
 }
 // Assemble the system prompt for a given Sim: cognitive process + retrieved
-// public material, plus — Roger Sim only, when the private brain loaded —
-// the retrieved private sections and the private prompt. Other Sims get
-// their placeholder note; Aria gets her Echo/humanity note. No Sim other
-// than Roger Sim ever receives private material.
-function buildSimSystemPrompt(query, knowledge, access, privateBrain) {
+// public material, plus — Roger Sim only — the retrieved public mind packet
+// and, when the secrets file has anything in it, the secrets (capped).
+// Other Sims get their placeholder note; Aria gets her Echo/humanity note.
+// No Sim other than Roger Sim ever receives the public mind packet as its
+// personality, and no Sim other than Roger Sim ever receives secrets material.
+function buildSimSystemPrompt(query, knowledge, access, publicMind, privateSecrets) {
   const base = buildSystemPrompt(query, knowledge);
   const parts = [base, `SIM: ${access.name} — ${access.note}`];
-  if (access.privateBrain && privateBrain && privateBrain.loaded) {
-    const retrieved = retrievePrivateBrain(query, privateBrain);
+  if (access.publicMind && publicMind && publicMind.loaded) {
+    const retrieved = retrievePublicMind(query, publicMind);
     if (retrieved) parts.push(retrieved);
+  }
+  if (access.privateSecrets && privateSecrets && privateSecrets.loaded) {
+    const secrets = retrievePrivateSecrets(query, privateSecrets);
+    if (secrets) parts.push(secrets);
   }
   return parts.filter(Boolean).join('\n\n');
 }
@@ -313,11 +355,11 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
   } }));
   app.use(express.json({ limit: '1mb' }));
 
-  app.get('/health', (_req, res) => res.json({ status: state.prompt ? 'online' : 'unavailable', mind: 'Roger Sim', corpus_loaded: Boolean(state.prompt), sim_intellect_loaded: Boolean(state.intellect && state.intellect.loaded), private_brain_loaded: Boolean(state.privateBrain && state.privateBrain.loaded), timestamp: new Date().toISOString() }));
+  app.get('/health', (_req, res) => res.json({ status: state.prompt ? 'online' : 'unavailable', mind: 'Roger Sim', corpus_loaded: Boolean(state.prompt), sim_intellect_loaded: Boolean(state.intellect && state.intellect.loaded), public_mind_loaded: Boolean(state.publicMind && state.publicMind.loaded), private_secrets_loaded: Boolean(state.privateSecrets && state.privateSecrets.loaded), private_brain_loaded: Boolean(state.privateSecrets && state.privateSecrets.loaded), timestamp: new Date().toISOString() }));
 
   // Root route: previously unimplemented (Express returned 'Cannot GET /').
   // Working model only: public CORE knowledge, no private Sim brain claim.
-  app.get('/', (_req, res) => res.json({ service: 'roger-sim-api', mind: 'Roger Sim', status: state.prompt ? 'online' : 'unavailable', corpus_loaded: Boolean(state.prompt), sim_intellect_loaded: Boolean(state.intellect && state.intellect.loaded), health: '/health', sim_intellect: '/sim/intellect', note: 'working model, public CORE only; /sim/chat is the Sim-intellect route; private brain: Roger Sim only, fail-closed, token not configured until Step 3' }));
+  app.get('/', (_req, res) => res.json({ service: 'roger-sim-api', mind: 'Roger Sim', status: state.prompt ? 'online' : 'unavailable', corpus_loaded: Boolean(state.prompt), sim_intellect_loaded: Boolean(state.intellect && state.intellect.loaded), health: '/health', sim_intellect: '/sim/intellect', note: 'working model, public CORE only; /sim/chat is the Sim-intellect route; public mind + private secrets file: Roger Sim only, fail-closed, secrets file empty and token not configured' }));
 
   app.get('/world', async (_req, res) => {
     const [newsResult, cryptoResult] = await Promise.allSettled([request(NEWS_URL, {}, 10000, fetchFn), request(CRYPTO_URL, { headers: { Accept: 'application/json', 'User-Agent': 'Roger-Sim/1.0 (public-world-monitor)' } }, 10000, fetchFn)]);
@@ -382,8 +424,10 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
   app.get('/sim/intellect', (_req, res) => res.json({ service: 'sim-intellect', ...simIntellect.statusOf(state.intellect || null), core_loaded: Boolean(state.prompt) }));
 
   // GET /sims/access — the access rule, as a table. Status only: who can
-  // access what. Never returns prompt or private contents.
-  app.get('/sims/access', (_req, res) => res.json({ rule: 'The whole system knows who Roger is; it is not actually him. Only Roger Sim carries him.', private_brain_loaded: Boolean(state.privateBrain && state.privateBrain.loaded), access: accessTable() }));
+  // access what. Never returns prompt, mind, or secrets contents.
+  // private_brain_loaded is kept for compatibility and now reports the
+  // private SECRETS file (false when no token / empty file — correct).
+  app.get('/sims/access', (_req, res) => res.json({ rule: 'The whole system knows who Roger is; it is not actually him. Roger Sim\'s mind is public; only his secrets file is private, and only Roger Sim reads it.', public_mind_loaded: Boolean(state.publicMind && state.publicMind.loaded), private_secrets_loaded: Boolean(state.privateSecrets && state.privateSecrets.loaded), private_brain_loaded: Boolean(state.privateSecrets && state.privateSecrets.loaded), access: accessTable() }));
 
   // POST /sim/chat — draft answer, then the real Agent Zero second pass.
   // Body: { model?, messages } (same shape as /proxy/chat).
@@ -409,12 +453,13 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
     // array message content.
     const query = lastUserText(messages);
     const dbQuery = state.intellect.query(query);
-    // /sim/chat is a Roger Sim route: the only Sim that carries the private
-    // brain (hook, fail-closed — loaded only when Step 3 token is set).
+    // /sim/chat is a Roger Sim route: the only Sim that carries the public
+    // mind packet and the private secrets file (fail-closed — the secrets
+    // file loads only when the token is set and the file has anything in it).
     const access = resolveSimAccess('roger-sim');
     const systemPrompt = [
       state.intellect.prompt,
-      buildSimSystemPrompt(query, state.knowledge, access, state.privateBrain),
+      buildSimSystemPrompt(query, state.knowledge, access, state.publicMind, state.privateSecrets),
       dbQuery.matches.length ? `---\n\nYAML-database matches for this question (keyword search over the loaded slice):\n${JSON.stringify(dbQuery.matches, null, 2)}` : '',
     ].filter(Boolean).join('\n\n');
     const draft = await completeChat({ model, messages: [{ role: 'system', content: systemPrompt }, ...messages] });
@@ -478,7 +523,7 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
     }
     if (typeof model !== 'string' || typeof stream !== 'boolean') return res.status(400).json({ error: 'Invalid model or stream' });
     const access = resolveSimAccess(req.body?.sim);
-    const systemContent = state.knowledge ? buildSimSystemPrompt(lastUserText(messages), state.knowledge, access, state.privateBrain) : state.prompt;
+    const systemContent = state.knowledge ? buildSimSystemPrompt(lastUserText(messages), state.knowledge, access, state.publicMind, state.privateSecrets) : state.prompt;
     const preparedMessages = [{ role: 'system', content: systemContent }, ...messages];
     for (const name of providerOrder(model)) {
       const provider = PROVIDERS[name];
@@ -575,18 +620,37 @@ async function loadWithRetry(state, env = process.env) {
   }
 }
 
-async function loadPrivateBrainWithRetry(state, env = process.env) {
-  // Private brain hook, background, fail-closed. No token = not configured,
-  // and the public model keeps running. A bad token is retried, never fatal.
-  // Contents are held in state.privateBrain only, never logged or returned.
-  while (!state.privateBrain || !state.privateBrain.loaded) {
-    const brain = await loadPrivateBrain(env);
-    if (brain.loaded) {
-      state.privateBrain = brain;
-      console.log('Private brain loaded (Roger Sim only)');
+async function loadPublicMindWithRetry(state, env = process.env) {
+  // Public mind packet, background, fail-closed. No token: a 404 (public
+  // packet PR not merged yet) or an empty file just leaves the Sim on the
+  // public CORE packet. Contents are held in state.publicMind only, never
+  // logged or returned — the packet is public, but the route never dumps it.
+  while (!state.publicMind || !state.publicMind.loaded) {
+    const mind = await loadPublicMind(env);
+    if (mind.loaded) {
+      state.publicMind = mind;
+      console.log('Public mind packet loaded (Roger Sim only)');
       return;
     }
-    state.privateBrain = brain;
+    state.publicMind = mind;
+    await new Promise((resolve) => setTimeout(resolve, 60000));
+  }
+}
+
+async function loadPrivateSecretsWithRetry(state, env = process.env) {
+  // Private secrets file, background, fail-closed. No token = not configured,
+  // and the public model keeps running. An empty file is not a failure: it
+  // means there is nothing secret yet, and the Sim keeps running on the
+  // public packet. A bad token is retried, never fatal. Contents are held
+  // in state.privateSecrets only, never logged or returned.
+  while (!state.privateSecrets || !state.privateSecrets.loaded) {
+    const secrets = await loadPrivateSecrets(env);
+    if (secrets.loaded) {
+      state.privateSecrets = secrets;
+      console.log('Private secrets file loaded (Roger Sim only)');
+      return;
+    }
+    state.privateSecrets = secrets;
     await new Promise((resolve) => setTimeout(resolve, 60000));
   }
 }
@@ -617,15 +681,16 @@ async function loadIntellectWithRetry(state, env = process.env) {
 }
 
 async function start() {
-  const state = { prompt: '', intellect: null, privateBrain: { loaded: false, reason: 'not configured' } };
+  const state = { prompt: '', intellect: null, publicMind: { loaded: false, reason: 'not configured' }, privateSecrets: { loaded: false, reason: 'not configured' } };
   // Load in background with retries; server still listens immediately
   // so /health reports status while loading.
   loadWithRetry(state);
   loadIntellectWithRetry(state);
-  loadPrivateBrainWithRetry(state);
+  loadPublicMindWithRetry(state);
+  loadPrivateSecretsWithRetry(state);
   createApp({ state }).listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('Roger Sim API listening'));
 }
 
 if (require.main === module) start();
-module.exports = { createApp, loadPrompt, loadKnowledge, buildSystemPrompt, buildSimSystemPrompt, retrieveSections, retrieveDirectory, retrievePrivateBrain, splitSections, COGNITIVE_PROCESS, providerOrder, resolveSimAccess, accessTable, loadPrivateBrain, simIntellect, agentZero, simMemory };
+module.exports = { createApp, loadPrompt, loadKnowledge, buildSystemPrompt, buildSimSystemPrompt, retrieveSections, retrieveDirectory, retrievePublicMind, retrievePrivateSecrets, splitSections, COGNITIVE_PROCESS, providerOrder, resolveSimAccess, accessTable, loadPublicMind, loadPrivateSecrets, simIntellect, agentZero, simMemory };
 
