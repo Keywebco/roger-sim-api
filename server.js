@@ -349,8 +349,11 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
+  // CORS allowlist: Federation origins only, no wildcard. next-xus.biz
+  // added 2026-11-13: the .biz desktop is where the guide-bot panels live,
+  // and its preflight was failing (no Access-Control-Allow-Origin).
   app.use(cors({ origin(origin, callback) {
-    if (!origin || origin === 'https://keywebco.github.io' || origin === 'https://next-xus.net' || origin === 'https://next-xus.info' || origin === 'https://next-xus.org' || /^http:\/\/localhost(?::\d+)?$/.test(origin)) return callback(null, true);
+    if (!origin || origin === 'https://keywebco.github.io' || origin === 'https://next-xus.biz' || origin === 'https://www.next-xus.biz' || origin === 'https://next-xus.net' || origin === 'https://next-xus.info' || origin === 'https://next-xus.org' || /^http:\/\/localhost(?::\d+)?$/.test(origin)) return callback(null, true);
     return callback(null, false);
   } }));
   app.use(express.json({ limit: '1mb' }));
@@ -580,7 +583,7 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
 
   // Browser-facing proxy: the web chat sends no credentials. The server attaches
   // BRIDGE_TOKEN internally so the token never ships in public HTML/JS.
-  // Same CORS policy as the rest of the app (keywebco.github.io + next-xus.net/.info/.org + localhost).
+  // Same CORS policy as the rest of the app (keywebco.github.io + next-xus.biz/.net/.info/.org + localhost).
   // A light per-IP limit protects the provider budget, since this route is open.
   const proxyHits = new Map();
   const PROXY_WINDOW_MS = 60000;
