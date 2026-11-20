@@ -178,3 +178,15 @@ test('server: /sims/access and /health report the split rule, never contents', a
     appServer.close();
   }
 });
+
+// Honesty fix 2026-11-20: when a layer is not loaded, the prompt says so,
+// so Roger Sim never claims to hold a secrets file it does not have.
+test('honesty: Roger Sim prompt flags an unloaded secrets file', () => {
+  const knowledge = { core: '# A\nalpha', directory: [] };
+  const access = server.resolveSimAccess('roger-sim');
+  const notLoaded = server.buildSimSystemPrompt('alpha', knowledge, access, { loaded: false }, { loaded: false });
+  assert.ok(notLoaded.includes('NOT LOADED right now'));
+  assert.ok(notLoaded.includes('the private secrets file'));
+  const loaded = server.buildSimSystemPrompt('alpha', knowledge, access, { loaded: true, soulMap: '# S\nalpha' }, { loaded: true, secrets: 'PLACEHOLDER' });
+  assert.ok(!loaded.includes('NOT LOADED right now'));
+});

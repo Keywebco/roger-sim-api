@@ -200,7 +200,14 @@ function retrievePrivateSecrets(query, privateSecrets) {
 // personality, and no Sim other than Roger Sim ever receives secrets material.
 function buildSimSystemPrompt(query, knowledge, access, publicMind, privateSecrets) {
   const base = buildSystemPrompt(query, knowledge);
-  const parts = [base, `SIM: ${access.name} — ${access.note}`];
+  // Honesty fix 2026-11-20: the access note says what this Sim MAY carry.
+  // When a layer is not actually loaded, say so in the prompt, so the Sim
+  // never claims to hold a public mind packet or secrets file it does not have.
+  const missing = [];
+  if (access.publicMind && !(publicMind && publicMind.loaded)) missing.push('the public personality packet');
+  if (access.privateSecrets && !(privateSecrets && privateSecrets.loaded)) missing.push('the private secrets file');
+  const loadNote = missing.length ? ` NOT LOADED right now: ${missing.join(' and ')}. If asked, say plainly that it is not loaded; never claim to hold it.` : '';
+  const parts = [base, `SIM: ${access.name} — ${access.note}${loadNote}`];
   if (access.publicMind && publicMind && publicMind.loaded) {
     const retrieved = retrievePublicMind(query, publicMind);
     if (retrieved) parts.push(retrieved);
@@ -349,11 +356,12 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  // CORS allowlist: Federation origins only, no wildcard. next-xus.biz
+  // CORS allowlist: Federation origins only, no wildcard. next-xus.com
+  // added 2026-11-20 (current Next-Xus domain, was missing). next-xus.biz
   // added 2026-11-13: the .biz desktop is where the guide-bot panels live,
   // and its preflight was failing (no Access-Control-Allow-Origin).
   app.use(cors({ origin(origin, callback) {
-    if (!origin || origin === 'https://keywebco.github.io' || origin === 'https://next-xus.biz' || origin === 'https://www.next-xus.biz' || origin === 'https://next-xus.net' || origin === 'https://next-xus.info' || origin === 'https://next-xus.org' || /^http:\/\/localhost(?::\d+)?$/.test(origin)) return callback(null, true);
+    if (!origin || origin === 'https://keywebco.github.io' || origin === 'https://next-xus.biz' || origin === 'https://www.next-xus.biz' || origin === 'https://next-xus.net' || origin === 'https://next-xus.info' || origin === 'https://next-xus.org' || origin === 'https://next-xus.com' || /^http:\/\/localhost(?::\d+)?$/.test(origin)) return callback(null, true);
     return callback(null, false);
   } }));
   app.use(express.json({ limit: '1mb' }));
@@ -362,7 +370,7 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
 
   // Root route: previously unimplemented (Express returned 'Cannot GET /').
   // Working model only: public CORE knowledge, no private Sim brain claim.
-  app.get('/', (_req, res) => res.json({ service: 'roger-sim-api', mind: 'Roger Sim', status: state.prompt ? 'online' : 'unavailable', corpus_loaded: Boolean(state.prompt), sim_intellect_loaded: Boolean(state.intellect && state.intellect.loaded), health: '/health', sim_intellect: '/sim/intellect', note: 'working model, public CORE only; /sim/chat is the Sim-intellect route; public mind + private secrets file: Roger Sim only, fail-closed, secrets file empty and token not configured' }));
+  app.get('/', (_req, res) => res.json({ service: 'roger-sim-api', mind: 'Roger Sim', status: state.prompt ? 'online' : 'unavailable', corpus_loaded: Boolean(state.prompt), sim_intellect_loaded: Boolean(state.intellect && state.intellect.loaded), health: '/health', sim_intellect: '/sim/intellect', note: `working model; /sim/chat is the Sim-intellect route; public mind + private secrets file: Roger Sim only, fail-closed; public mind ${state.publicMind && state.publicMind.loaded ? 'loaded' : 'not loaded (' + ((state.publicMind && state.publicMind.reason) || 'not configured') + ')'}; private secrets file ${state.privateSecrets && state.privateSecrets.loaded ? 'loaded' : 'not loaded (' + ((state.privateSecrets && state.privateSecrets.reason) || 'not configured') + ')'}` }));
 
   app.get('/world', async (_req, res) => {
     const [newsResult, cryptoResult] = await Promise.allSettled([request(NEWS_URL, {}, 10000, fetchFn), request(CRYPTO_URL, { headers: { Accept: 'application/json', 'User-Agent': 'Roger-Sim/1.0 (public-world-monitor)' } }, 10000, fetchFn)]);
@@ -430,7 +438,7 @@ function createApp({ env = process.env, fetchFn = fetch, state = { prompt: '' } 
   // access what. Never returns prompt, mind, or secrets contents.
   // private_brain_loaded is kept for compatibility and now reports the
   // private SECRETS file (false when no token / empty file — correct).
-  app.get('/sims/access', (_req, res) => res.json({ rule: 'The whole system knows who Roger is; it is not actually him. Roger Sim\'s mind is public; only his secrets file is private, and only Roger Sim reads it.', public_mind_loaded: Boolean(state.publicMind && state.publicMind.loaded), private_secrets_loaded: Boolean(state.privateSecrets && state.privateSecrets.loaded), private_brain_loaded: Boolean(state.privateSecrets && state.privateSecrets.loaded), access: accessTable() }));
+  app.get('/sims/access', (_req, res) => res.json({ rule: 'The whole system knows who Roger is; it is not actually him. Roger Sim\'s mind is public; only his secrets file is private, and only Roger Sim reads it.', public_mind_loaded: Boolean(state.publicMind && state.publicMind.loaded), private_secrets_loaded: Boolean(state.privateSecrets && state.privateSecrets.loaded), private_brain_loaded: Boolean(state.privateSecrets && state.privateSecrets.loaded), public_mind_status: (state.publicMind && state.publicMind.loaded) ? 'loaded' : ((state.publicMind && state.publicMind.reason) || 'not configured'), private_secrets_status: (state.privateSecrets && state.privateSecrets.loaded) ? 'loaded' : ((state.privateSecrets && state.privateSecrets.reason) || 'not configured'), access: accessTable() }));
 
   // POST /sim/chat — draft answer, then the real Agent Zero second pass.
   // Body: { model?, messages } (same shape as /proxy/chat).

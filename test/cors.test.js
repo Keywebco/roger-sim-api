@@ -17,6 +17,7 @@ const ALLOWED_ORIGINS = [
   'https://next-xus.net',
   'https://next-xus.org',
   'https://next-xus.info',
+  'https://next-xus.com',
   'https://keywebco.github.io',
 ];
 

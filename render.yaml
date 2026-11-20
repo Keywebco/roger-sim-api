@@ -18,3 +18,8 @@ services:
         sync: false
       - key: BRIDGE_TOKEN
         sync: false
+      # Private secrets file (Keywebco/roger-sim-brain secrets/roger-sim-secrets.md).
+      # Value: a GitHub fine-grained token, read-only Contents on roger-sim-brain.
+      # Roger sets it in the Render dashboard; never commit a value.
+      - key: SIM_PRIVATE_BRAIN_TOKEN
+        sync: false
