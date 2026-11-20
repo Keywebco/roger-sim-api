@@ -26,6 +26,7 @@ function stubFetch(map) {
   };
 }
 const FIXTURE_MAP = {
+  'https://raw.githubusercontent.com/Keywebco/sovereign-knowledge-os/main/knowledge/humancodex/HUMANCODEX-CORE.md': fixture('HUMANCODEX-CORE.md'),
   'https://raw.githubusercontent.com/Keywebco/sovereign-knowledge-os/main/knowledge/echo-core.md': fixture('echo-core.md'),
   'https://raw.githubusercontent.com/Keywebco/nextxus-yaml/main/source/roger-sim/mind/roger-sim-mind.yaml': fixture('roger-sim-mind.yaml'),
   'https://raw.githubusercontent.com/Keywebco/nextxus-yaml/main/source/roger-sim/mind/memory-log.yaml': fixture('memory-log.yaml'),
@@ -42,7 +43,9 @@ test('loader: loads all three parts in order, from the fixtures', async () => {
   assert.equal(intellect.parts[1], true);
   assert.equal(intellect.parts[2], true);
   assert.equal(intellect.parts[3], true);
-  assert.equal(intellect.sources.filter((s) => s.ok).length, 9);
+  assert.equal(intellect.sources.filter((s) => s.ok).length, 10);
+  assert.ok(intellect.prompt.indexOf('Immutable HumanCodex core') >= 0 && intellect.prompt.indexOf('Immutable HumanCodex core') < intellect.prompt.indexOf('Echo Core 64'));
+  assert.ok(intellect.prompt.includes('FACT, INFERENCE, ASSUMPTION, and UNKNOWN'));
   assert.equal(intellect.sources.filter((s) => !s.ok).length, 0);
   // Loader order: Echo Core first, then the mind, then the procedure.
   const echoAt = intellect.prompt.indexOf('Echo Core 64');
@@ -58,7 +61,12 @@ test('loader: a failed source is listed, not fatal; both Part 1+2 failing means 
   const partial = await loader.loadIntellect({ fetchFn: stubFetch({}) });
   assert.equal(partial.loaded, false); // only the local procedure loaded
   assert.equal(partial.sources.filter((s) => !s.ok).length, 8);
-  assert.equal(loader.statusOf(partial).sources.length, 9);
+  assert.equal(loader.statusOf(partial).sources.length, 10);
+  // The HumanCodex rulebook falls back to the bundled copy when the fetch fails.
+  const codex = partial.sources.find((s) => s.id === 'humancodex-core');
+  assert.equal(codex.ok, true);
+  assert.match(codex.error, /bundled copy used/);
+  assert.ok(partial.prompt.includes('HUMANCODEX CORE'));
   assert.equal(loader.statusOf(null).loaded, false);
 });
 
@@ -149,7 +157,7 @@ test('server: sim routes work and /proxy/chat is unchanged', async () => {
     assert.equal(health.sim_intellect_loaded, true);
     const status = await (await fetch(`${base}/sim/intellect`)).json();
     assert.equal(status.loaded, true);
-    assert.equal(status.sources.length, 9);
+    assert.equal(status.sources.length, 10);
     assert.ok(!JSON.stringify(status).includes('Hollow State'), 'status must not leak prompt contents');
     const badMemory = await fetch(`${base}/sim/memory`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: 'x' }) });
     assert.equal(badMemory.status, 400);

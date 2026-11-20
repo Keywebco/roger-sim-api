@@ -43,3 +43,7 @@ rented API brain).
 1. `npm install && npm test` — unit + smoke tests (no provider keys needed).
 2. Local server smoke test (see `../REPORT.md`): start with stubbed fetch, check `/health`, `/sim/intellect`, `/sim/memory` (valid + invalid), and that `/proxy/chat` still behaves as before (503 without a loaded prompt, 502 without provider keys — same as main).
 3. Live test (after merge + Manual Deploy, Roger's word): `GET /sim/intellect` on Render (all 9 sources ok), then `POST /sim/chat` with a question whose answer is in the mind layer, and one with an invented number/date — the first should pass Agent Zero, the second should be rejected with a reason. Then `POST /sim/memory` with a test record and file the returned YAML block as a PR to nextxus-yaml.
+
+## Active rulebook (added 2026-11-20)
+
+The loader now places the Immutable HumanCodex core first in the intellect prompt. Source: `Keywebco/sovereign-knowledge-os/knowledge/humancodex/HUMANCODEX-CORE.md` (raw GitHub, unauthenticated, like the other sources). If that fetch fails, the bundled copy `sim-intellect/humancodex-core.md` is used and the status lists "bundled copy used". The rulebook is enforced through prompt instructions (Hollow Vessel clearing, FACT / INFERENCE / ASSUMPTION / UNKNOWN labels, 95% Truth Gate), not a hard code-level gate. The Next-Xus Federation stack is GitHub, Google Drive, the Federation repositories, and the Immutable HumanCodex.
