@@ -18,6 +18,16 @@ No static site — this is a service. Deployed on Render from `render.yaml` (ser
 
 MiMo (`mimo-v2.6-flash`), DeepSeek (`deepseek-chat`), Gemini (`gemini-2.5-pro`) — first requested, then failover across the rest. Emergent is not used.
 
+## Neutral Sim relay (`/proxy/sim`) for Career Sims
+
+Added 2026-11-20 on Roger Keyserling's spoken yes (6:34 PM CT). Additive: `/proxy/chat`, `/sim/chat` and `/v1/chat/completions` behave exactly as before.
+
+- `GET /proxy/sim` returns `{ route: "proxy/sim", available: true, limits }` so pages can feature-detect it.
+- `POST /proxy/sim` with `{ brain_id?, persona, messages: [{ role: "user" | "assistant", content }] }`. The caller's brain persona **replaces** Roger Sim's prompt; Roger Sim's own prompt, public mind and secrets file are never used on this route. A short fixed safety header (simulation, not Roger, defer to licensed humans, emergencies) is placed above the persona.
+- Limits: 10 requests per minute per IP (`SIM_PROXY_RATE_LIMIT`), 300 requests per day for the whole route (`SIM_PROXY_DAILY_CAP`), 32 KB body, 8,000-character persona, at most 20 messages of 4,000 characters and 12,000 characters in all; no system messages from the caller; non-streaming; 600 max tokens.
+- No new keys: it uses the same provider keys and failover order as the rest of the service.
+- Used by https://next-xus.net/career-sims/ (Keywebco/keywebco.github.io `career-sims/`). Needs a manual Render deploy to go live; until then the Career Sims page shows the relay as "coming soon".
+
 ---
 
 Part of the [NextXus Federation](https://keywebco.github.io).
