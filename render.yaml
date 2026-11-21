@@ -14,8 +14,6 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: EMERGENT_LLM_KEY
-        sync: false
       - key: BRIDGE_TOKEN
         sync: false
       # Private secrets file (Keywebco/roger-sim-brain secrets/roger-sim-secrets.md).

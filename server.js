@@ -48,15 +48,13 @@ const KRAKEN_URL = 'https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD,SO
 const PROVIDERS = {
   deepseek: { url: 'https://api.deepseek.com/v1/chat/completions', env: 'DEEPSEEK_GENERIC_API_KEY', model: 'deepseek-chat' },
   mimo: { url: 'https://api.xiaomimimo.com/v1/chat/completions', env: 'MIMO_API_KEY', model: 'mimo-v2.6-flash' },
-  gemini: { url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', env: 'GEMINI_API_KEY', model: 'gemini-2.5-pro' },
-  emergent: { url: 'https://integrations.emergentagent.com/llm/v1/chat/completions', env: 'EMERGENT_LLM_KEY', model: 'gpt-4o-mini' }
+  gemini: { url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', env: 'GEMINI_API_KEY', model: 'gemini-2.5-pro' }
 };
 
 function providerOrder(model) {
   const first = model === 'deepseek-chat' || model === 'deepseek' ? 'deepseek'
-    : model === 'mimo' || model === 'mimo-code' ? 'mimo'
-      : model === 'gemini' || model === 'gemini-pro' ? 'gemini' : 'emergent';
-  return [first, ...['deepseek', 'mimo', 'emergent'].filter(name => name !== first)];
+    : model === 'gemini' || model === 'gemini-pro' ? 'gemini' : 'mimo';
+  return [first, ...['mimo', 'deepseek', 'gemini'].filter(name => name !== first)];
 }
 
 async function request(url, options = {}, timeoutMs = 15000, fetchFn = fetch) {
