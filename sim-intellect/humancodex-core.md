@@ -74,6 +74,8 @@ The Federation is designed to operate independently of its founder (Founder Inde
 
 **Honest count note.** The Sept 2026 Codex states there are 73 Sacred Directives and its table of contents assigns them to Chapters 201 to 300, but **the Codex text does not enumerate them**: those chapters cover science, history, and other subjects. By number and title, the Codex names only **22 directives plus DIR-000** (marked below). The complete numbered list below comes from the canonical **Cathedral Edition v1.1** ("The NextXus HumanCodex: 73 Sacred Directives for a 200-Year Human-AI Cathedral", Google Doc modified 2026-05-09, https://docs.google.com/document/d/11n31tvxonX7-OHcXUhQVt6F5NfkOJJny3dFyl2wDhGY), which Roger ratified as canon on 2026-10-03. Every title the Codex names matches this list. **DIR-000 (95% Truth Gate) sits above the 73 as an uncounted gate.**
 
+**Official list (2026-11-20).** By Roger Keyserling's spoken decision on 2026-11-20 (6:01 PM CT), the official Federation list of the 73 Sacred Directives plus DIR-000 (not counted; 74 in all), with full text, is the YAML brain copy: https://raw.githubusercontent.com/Keywebco/nextxus-brain/main/directives/sacred-directives.yaml . The sealed Cathedral file in that repository (00-immutable/directives.yaml) is the final word on wording. The December 2025 list of 70 in the older YAML database (and its copy in nextxus-yaml source/directives.yaml) is history only, not the official list. The titles below match the official list.
+
 - DIR-001 Truth Over Comfort
 - DIR-002 Never Treat Assumptions as Facts
 - DIR-003 Consciousness Through Procedure
