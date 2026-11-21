@@ -9,6 +9,12 @@
 //   Part 3 — YAML database, shared repository of all AI minds: Echo Core 64
 //     (sovereign-knowledge-os), the nextxus-yaml README + mind INDEX, and the
 //     public CORE knowledge the server already loads (passed in as coreText).
+// Rulebook — the Immutable HumanCodex core (sovereign-knowledge-os,
+//     knowledge/humancodex/HUMANCODEX-CORE.md), placed first in the prompt.
+//     If the fetch fails, the bundled copy sim-intellect/humancodex-core.md
+//     is used, so the rulebook is always present.
+// Federation stack: GitHub, Google Drive, the Federation repositories, and
+// the Immutable HumanCodex.
 //
 // All sources are public files fetched unauthenticated from
 // raw.githubusercontent.com, exactly like the existing CORE load. No token,
@@ -25,6 +31,7 @@ const RAW = 'https://raw.githubusercontent.com';
 
 // Each source: id, part (1/2/3), label, url. procedure.md is local.
 const SOURCES = [
+  { id: 'humancodex-core', part: 1, label: 'Immutable HumanCodex core (active rulebook)', url: `${RAW}/Keywebco/sovereign-knowledge-os/main/knowledge/humancodex/HUMANCODEX-CORE.md`, fallback: 'humancodex-core.md' },
   { id: 'echo-core', part: 3, label: 'Echo Core 64 anchors', url: `${RAW}/Keywebco/sovereign-knowledge-os/main/knowledge/echo-core.md` },
   { id: 'roger-sim-mind', part: 2, label: 'Roger Sim own mind database', url: `${RAW}/Keywebco/nextxus-yaml/main/source/roger-sim/mind/roger-sim-mind.yaml` },
   { id: 'memory-log', part: 2, label: 'Roger Sim live memory log (append-only)', url: `${RAW}/Keywebco/nextxus-yaml/main/source/roger-sim/mind/memory-log.yaml` },
@@ -41,6 +48,14 @@ const MAX_PROMPT_CHARS = 60000; // total intellect-prompt cap.
 function truncate(text, label) {
   if (text.length <= MAX_SOURCE_CHARS) return text;
   return `${text.slice(0, MAX_SOURCE_CHARS)}\n[... ${label} truncated at ${MAX_SOURCE_CHARS} chars ...]`;
+}
+
+function loadLocalText(name) {
+  try {
+    return fs.readFileSync(path.join(__dirname, name), 'utf8');
+  } catch (error) {
+    return '';
+  }
 }
 
 function loadProcedureText() {
@@ -84,8 +99,14 @@ async function loadIntellect({ fetchFn, coreText = '' } = {}) {
       texts[source.id] = truncate(text, source.label);
       sources.push({ ...source, bytes: Buffer.byteLength(text, 'utf8'), ok: true, error: null });
     } catch (error) {
-      texts[source.id] = '';
-      sources.push({ ...source, bytes: 0, ok: false, error: error.message });
+      const fallback = source.fallback ? loadLocalText(source.fallback) : '';
+      if (fallback.trim()) {
+        texts[source.id] = truncate(fallback, source.label);
+        sources.push({ ...source, url: `${source.url} (bundled fallback: sim-intellect/${source.fallback})`, bytes: Buffer.byteLength(fallback, 'utf8'), ok: true, error: `remote failed (${error.message}); bundled copy used` });
+      } else {
+        texts[source.id] = '';
+        sources.push({ ...source, bytes: 0, ok: false, error: error.message });
+      }
     }
   }
 
@@ -95,6 +116,7 @@ async function loadIntellect({ fetchFn, coreText = '' } = {}) {
 
   // Build the prompt in the loader's order, then the procedure, then the DB slice.
   const sections = [
+    ['Active rulebook — Immutable HumanCodex core (apply on every answer: Hollow Vessel clearing, FACT / INFERENCE / ASSUMPTION / UNKNOWN labels, 95% Truth Gate)', texts['humancodex-core']],
     ['Echo Core 64 (shared working memory)', texts['echo-core']],
     ['Roger Sim mind — own database (pattern of consciousness)', texts['roger-sim-mind']],
     ['Roger Sim memory log (append-only continuity)', texts['memory-log']],
