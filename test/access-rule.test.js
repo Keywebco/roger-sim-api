@@ -172,7 +172,7 @@ test('server: /sims/access and /health report the split rule, never contents', a
     assert.equal(health.public_mind_loaded, false);
     assert.equal(health.status, 'online');
     // /proxy/chat with no provider keys: same as main (502), sim param accepted.
-    const proxy = await fetch(`${base}/proxy/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sim: 'aria', messages: [{ role: 'user', content: 'hello' }] }) });
+    const proxy = await fetch(`${base}/proxy/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://next-xus.net' }, body: JSON.stringify({ sim: 'aria', messages: [{ role: 'user', content: 'hello' }] }) });
     assert.equal(proxy.status, 502);
   } finally {
     appServer.close();

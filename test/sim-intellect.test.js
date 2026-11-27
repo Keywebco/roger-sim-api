@@ -170,10 +170,10 @@ test('server: sim routes work and /proxy/chat is unchanged', async () => {
     assert.equal(outbox.queued.length, 1);
     assert.ok(!JSON.stringify(outbox).includes('Agent Zero test.'), 'outbox GET must not expose contents');
     // /proxy/chat with no provider keys: same behaviour as main (502, no crash).
-    const proxy = await fetch(`${base}/proxy/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }) });
+    const proxy = await fetch(`${base}/proxy/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://next-xus.net' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }) });
     assert.equal(proxy.status, 502);
     // /sim/chat with no provider keys: 502 as well (intellect loaded, providers absent).
-    const sim = await fetch(`${base}/sim/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }) });
+    const sim = await fetch(`${base}/sim/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://next-xus.net' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }) });
     assert.equal(sim.status, 502);
   } finally {
     server.close();
@@ -188,7 +188,7 @@ test('server: /sim/chat answers 503 when the intellect is not loaded', async () 
   await new Promise((resolve) => server.on('listening', resolve));
   const port = server.address().port;
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/sim/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }) });
+    const res = await fetch(`http://127.0.0.1:${port}/sim/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://next-xus.net' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }) });
     assert.equal(res.status, 503);
   } finally {
     server.close();

@@ -97,13 +97,13 @@ const nodeFetch = require('node-fetch');
       assert.equal(access.public_mind_loaded, false, 'public packet PR unmerged: fetch fails closed');
       assert.ok(access.access[0].can.includes('public personality packet'));
       const proxy = await fetch(`${base}/proxy/chat`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://next-xus.net' },
         body: JSON.stringify({ messages: [{ role: 'user', content: 'What is the library?' }] }),
       });
       console.log('proxy/chat status (no provider keys):', proxy.status);
       assert.equal(proxy.status, 502, 'same as main with no keys configured');
       const sim = await fetch(`${base}/sim/chat`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://next-xus.net' },
         body: JSON.stringify({ messages: [{ role: 'user', content: 'What is the Keyserling Procedure?' }] }),
       });
       console.log('sim/chat status (no provider keys):', sim.status);
