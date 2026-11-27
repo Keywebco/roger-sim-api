@@ -31,8 +31,10 @@ async function startApp(env = {}, calls = []) {
   return { server, base: `http://127.0.0.1:${server.address().port}`, calls };
 }
 
-function post(base, path, body) {
-  return fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+function post(base, path, body, origin = 'https://next-xus.net') {
+  const headers = { 'Content-Type': 'application/json' };
+  if (origin) headers.Origin = origin;
+  return fetch(`${base}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
 }
 
 test('proxy/sim: GET advertises the route for feature detection', async () => {

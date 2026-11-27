@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/sim-intellect.test.js test/access-rule.test.js test/cors.test.js test/sim-proxy.test.js"
+    "test": "node --test test/sim-intellect.test.js test/access-rule.test.js test/cors.test.js test/sim-proxy.test.js test/chat-hardening.test.js"
   },
   "dependencies": {
     "express": "^5.3.0",
